@@ -73,17 +73,12 @@ The notebook performs the following high-level steps:
 - Threshold tuning below `0.5` is used to improve denied-claim recall.
 - A threshold of `0.40` is selected in the notebook to increase denied recall, with expected precision/accuracy trade-offs.
 
-## Environment Setup
+## Requirements
 
-Use Python 3.9+ recommended.
-
-Example setup:
+Install dependencies from `requirements.txt`.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install pandas numpy matplotlib scipy scikit-learn jupyter
+pip install -r requirements.txt
 ```
 
 ## How to Run
@@ -98,11 +93,42 @@ jupyter notebook
 3. Open `Health_Insurance_Claim_Status_ML.ipynb`.
 4. Run cells from top to bottom.
 
+## Train and Evaluate Outside Notebook
+
+This repository now includes a scriptable ML pipeline under `src/`.
+
+1. Put the required CSV files in the project root (or pass a custom `--data-dir`).
+2. Train models and save the best model artifact:
+
+```bash
+python -m src.train --data-dir . --model-out artifacts/best_model.joblib --threshold 0.40 --outputs-dir outputs
+```
+
+3. Evaluate the saved model on the reproducible test split:
+
+```bash
+python -m src.evaluate --data-dir . --model-path artifacts/best_model.joblib --outputs-dir outputs
+```
+
+Generated output files include:
+- `outputs/training_summary.json`
+- `outputs/validation_model_comparison.csv`
+- `outputs/validation_report_random_forest.txt`
+- `outputs/validation_report_gradient_boosting.txt`
+- `outputs/test_classification_report.txt`
+- `outputs/test_predictions.csv`
+
 ## Repository Structure
 
 ```text
 .
 ├── Health_Insurance_Claim_Status_ML.ipynb
+├── requirements.txt
+├── src/
+│   ├── __init__.py
+│   ├── pipeline.py
+│   ├── train.py
+│   └── evaluate.py
 └── README.md
 ```
 
@@ -111,11 +137,3 @@ jupyter notebook
 - This repository currently centers on a single notebook workflow.
 - Data files are not included in this repository structure view.
 - Reproducibility depends on having matching data schemas for the expected CSV files.
-
-## Suggested Next Improvements
-
-- Add a `requirements.txt` with pinned versions.
-- Add a data dictionary describing input columns.
-- Add a scriptable pipeline (`src/`) for train/evaluate outside notebooks.
-- Add ROC/PR analysis and threshold optimization by explicit business cost matrix.
-- Add model persistence and inference script for production-like scoring.
