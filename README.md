@@ -1,124 +1,25 @@
-# Health Insurance Claim Status ML
+# Cost-Sensitive Claim Status Classification
 
-This project analyzes health insurance claim behavior in two parts:
+A reproducible binary-classification project for predicting whether a claim is `PAID` or `DENIED`, with emphasis on decision-threshold optimization, model comparison, and reducing costly missed denials.
 
-1. Statistical fraud-risk assessment using hypothesis testing.
-2. Binary machine learning classification to predict whether a claim is `PAID` or `DENIED`.
+The original notebook, `Health_Insurance_Claim_Status_ML.ipynb`, is preserved. The repository now includes a stronger scriptable ML workflow designed to showcase reproducible modeling and production-oriented engineering rather than notebook-only analysis.
 
-The full analysis is implemented in the notebook:
-- `Health_Insurance_Claim_Status_ML.ipynb`
+## What the project demonstrates
 
-## Project Objectives
+- Multi-table feature assembly from encounters, claims, patients, providers, and organizations
+- Deterministic patient-age engineering using service date rather than the current calendar year
+- Missing-value handling through model pipelines instead of dropping incomplete rows
+- Numeric median imputation and categorical most-frequent imputation
+- One-hot encoding for categorical variables
+- Stratified 60/20/20 train/validation/test splitting
+- Comparison of Logistic Regression, Random Forest, and Gradient Boosting
+- Validation-only threshold tuning for the `DENIED` class
+- Recall-weighted F2 scoring for cost-sensitive classification
+- Probability-level evaluation using ROC-AUC and average precision
+- Saved model artifacts and reproducible holdout evaluation
+- Unit tests for threshold selection, preprocessing, and deterministic feature engineering
 
-### Part 1: Statistical Risk Assessment
-- Compare a selected provider's claim-cost behavior against peer providers in the same specialty.
-- Compare claim costs between two organizations.
-- Compare claim costs across multiple organizations in selected cities.
-- Compare encounter-class distributions between providers.
-
-Main statistical tests used:
-- One-sample t-test
-- Independent two-sample t-test
-- One-way ANOVA
-- Chi-square test of independence
-
-### Part 2: Machine Learning for Claim Status
-- Build a binary classifier for `PAID` vs `DENIED` claims.
-- Prioritize business risk reduction by minimizing missed denied claims.
-- Evaluate baseline models and perform threshold tuning.
-
-Models used:
-- Random Forest Classifier
-- Gradient Boosting Classifier
-
-## Data Files Expected
-
-The notebook loads the following CSV files from the project root:
-- `encounters.csv`
-- `claims.csv`
-- `organizations.csv`
-- `patients.csv`
-- `providers.csv`
-
-If these files are not present, the notebook will fail at data-loading steps.
-
-## Feature Engineering and Modeling Workflow
-
-The notebook performs the following high-level steps:
-
-1. Load and clean core datasets.
-2. Rename columns for consistency across tables.
-3. Join encounters, claims, and patient/provider/organization context.
-4. Convert patient birthdate into numeric age.
-5. Filter claim statuses to binary classes (`PAID`, `DENIED`).
-6. Build preprocessing with:
-   - `OneHotEncoder` for categorical features
-   - Numeric passthrough for numeric columns
-   - `ColumnTransformer` + `Pipeline`
-7. Split dataset into train/validation/test using a 60/20/20 strategy.
-8. Train and compare Random Forest and Gradient Boosting.
-9. Evaluate with classification reports and confusion matrices.
-10. Tune decision threshold (0.40 used in notebook) to improve recall for denied claims.
-11. Inspect feature importance for model interpretability.
-
-## Key Findings in Notebook
-
-### Statistical Analysis Highlights
-- Provider-vs-peer one-sample t-test: p-value reported as `0.099`, so no significant evidence at alpha `0.05` that the selected provider's mean claim cost is higher than peers.
-- Organization-vs-organization two-sample t-test: p-value reported as approximately `0.692`, indicating no significant difference in mean claim costs.
-- Provider encounter-mix chi-square test: p-value reported as `0.263`, suggesting no significant dependency between provider identity and encounter-class distribution at alpha `0.05`.
-
-### Machine Learning Highlights
-- The project frames missed denied claims as the primary business risk.
-- Threshold tuning below `0.5` is used to improve denied-claim recall.
-- A threshold of `0.40` is selected in the notebook to increase denied recall, with expected precision/accuracy trade-offs.
-
-## Requirements
-
-Install dependencies from `requirements.txt`.
-
-```bash
-pip install -r requirements.txt
-```
-
-## How to Run
-
-1. Place required CSV files in the project root.
-2. Start Jupyter:
-
-```bash
-jupyter notebook
-```
-
-3. Open `Health_Insurance_Claim_Status_ML.ipynb`.
-4. Run cells from top to bottom.
-
-## Train and Evaluate Outside Notebook
-
-This repository now includes a scriptable ML pipeline under `src/`.
-
-1. Put the required CSV files in the project root (or pass a custom `--data-dir`).
-2. Train models and save the best model artifact:
-
-```bash
-python -m src.train --data-dir . --model-out artifacts/best_model.joblib --threshold 0.40 --outputs-dir outputs
-```
-
-3. Evaluate the saved model on the reproducible test split:
-
-```bash
-python -m src.evaluate --data-dir . --model-path artifacts/best_model.joblib --outputs-dir outputs
-```
-
-Generated output files include:
-- `outputs/training_summary.json`
-- `outputs/validation_model_comparison.csv`
-- `outputs/validation_report_random_forest.txt`
-- `outputs/validation_report_gradient_boosting.txt`
-- `outputs/test_classification_report.txt`
-- `outputs/test_predictions.csv`
-
-## Repository Structure
+## Repository structure
 
 ```text
 .
@@ -129,11 +30,91 @@ Generated output files include:
 │   ├── pipeline.py
 │   ├── train.py
 │   └── evaluate.py
-└── README.md
+└── tests/
+    └── test_pipeline.py
 ```
 
-## Notes and Limitations
+## Expected source files
 
-- This repository currently centers on a single notebook workflow.
-- Data files are not included in this repository structure view.
-- Reproducibility depends on having matching data schemas for the expected CSV files.
+Place these CSV files in one directory:
+
+- `encounters.csv`
+- `claims.csv`
+- `organizations.csv`
+- `patients.csv`
+- `providers.csv`
+
+The data files are not committed to the repository.
+
+## Train models
+
+```bash
+pip install -r requirements.txt
+python -m src.train \
+  --data-dir . \
+  --model-out artifacts/best_model.joblib \
+  --outputs-dir outputs \
+  --threshold auto
+```
+
+`--threshold auto` searches the validation set for a threshold that maximizes DENIED-class F2. You can also pass a fixed probability threshold such as `--threshold 0.40`.
+
+Training writes model-comparison outputs such as:
+
+```text
+artifacts/
+├── best_model.joblib
+└── validation_metrics.json
+
+outputs/
+├── training_summary.json
+├── validation_model_comparison.csv
+└── validation_report_<model>.txt
+```
+
+## Evaluate the locked model
+
+```bash
+python -m src.evaluate \
+  --data-dir . \
+  --model-path artifacts/best_model.joblib \
+  --outputs-dir outputs
+```
+
+This evaluates the selected model and threshold on the untouched test split and writes:
+
+- classification report
+- confusion matrix
+- DENIED precision, recall, F1, and F2
+- ROC-AUC
+- average precision
+- row-level DENIED probabilities and predictions
+
+## Model-selection logic
+
+Each candidate model is trained only on the training split. Threshold selection is performed only on the validation split. The best model is selected using validation average precision, with DENIED F2 as the tie-break.
+
+The test split is used only after model and threshold selection are locked.
+
+## Why threshold tuning matters
+
+A default threshold of `0.50` is not automatically optimal for every business objective. In this project, a missed denied claim is treated as a more important error than an unnecessary review. F2 therefore weights recall more heavily than precision while still penalizing excessive false positives.
+
+This framing is transferable to many risk-sensitive binary-classification problems beyond insurance.
+
+## Tests
+
+```bash
+pytest -q
+```
+
+## Original statistical analysis
+
+The notebook also contains hypothesis-testing work, including one-sample and two-sample t-tests, ANOVA, and chi-square analysis. Those analyses remain part of the exploratory/statistical component; the upgraded `src/` package focuses on the reproducible ML workflow.
+
+## Limitations
+
+- Exact metrics depend on the source dataset and should be regenerated before publication.
+- The model uses a compact feature set and does not establish causal relationships.
+- Cost-sensitive threshold selection should ideally be tied to quantified operational costs.
+- Real deployments would require calibration, drift monitoring, subgroup checks, data contracts, and human-review workflows.
