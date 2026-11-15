@@ -7,3 +7,11 @@ artifacts/
 outputs/
 *.pyc
 .env
+
+# Raw claims/encounters and linked personal data must never be committed.
+/claims.csv
+/encounters.csv
+/patients.csv
+/providers.csv
+/organizations.csv
+/data/

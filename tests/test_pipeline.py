@@ -25,6 +25,20 @@ def test_preprocessor_handles_missing_values() -> None:
     assert np.isfinite(transformed).all()
 
 
+
+def test_preprocessor_handles_pandas_string_extension_dtype() -> None:
+    X = pd.DataFrame({
+        "visit_type": pd.Series(["ambulatory", pd.NA, "emergency"], dtype="string"),
+        "patient_gender": pd.Series(["M", "F", pd.NA], dtype="string"),
+        "patient_age": [40.0, np.nan, 52.0],
+        "total_visit_claim_cost": [100.0, 250.0, np.nan],
+        "claim_amount": [80.0, np.nan, 300.0],
+    })
+    transformed = build_preprocessor(X).fit_transform(X)
+    assert transformed.shape[0] == len(X)
+    assert np.isfinite(transformed).all()
+
+
 def test_threshold_selection_prefers_valid_threshold() -> None:
     y = pd.Series([DENIED_LABEL, DENIED_LABEL, PAID_LABEL, PAID_LABEL])
     probs = np.array([0.9, 0.7, 0.4, 0.1])

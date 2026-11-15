@@ -17,11 +17,11 @@ Measure denied-claim recall at fixed examiner capacity; false escalation rate; r
 |---|---|---|---|---|
 | BR-01 | Must | Model's role is human review prioritisation | README and model workflow | Examiner can reject or override suggestion |
 | BR-02 | Must | Define policy-consistent `PAID` / `DENIED` label and timing | Multi-table source schema | Business owner approves label glossary |
-| FR-01 | Must | Assemble encounters, claims, patients, providers and organizations | `src/pipeline.py` | Verified joins and duplicate/one-to-many handling |
+| FR-01 | Must | Assemble encounters, claims, patients, providers and organizations | `src/pipeline.py` validates ID uniqueness, join cardinality and matching keys | Test duplicate IDs, orphan claims, conflicting patient/provider/organization IDs and multi-claim encounters |
 | FR-02 | Must | Prevent future-outcome and post-decision information leakage | Feature selection / service-date age engineering | Time-bound feature audit |
-| FR-03 | Must | Impute missing values, encode categories, preserve split integrity | Preprocessing pipeline | Missing/novel input tests |
+| FR-03 | Must | Impute missing values, encode categories, isolate patient groups | Preprocessing and five-fold grouped split | No patient overlap across partitions; both claim outcomes in each partition |
 | FR-04 | Must | Compare LR, Random Forest, Gradient Boosting | `src/train.py` | Reproduced model comparison with source-data approval |
-| FR-05 | Must | Tune denied-class threshold on validation F2 | Training logic | Test set never used for threshold |
+| FR-05 | Must | Tune denied-class threshold on validation F2 | Training logic and source fingerprint | Test set never tunes threshold and altered source files invalidate evaluation |
 | NFR-01 | Must | Limit access to personal/claim-level data and predictions | **Production controls not evidenced** | Privacy impact assessment and negative access tests |
 | NFR-02 | Must | Provide review history, model version and fallbacks | **Queue/workflow not implemented** | Runbook and UAT execution |
 | NFR-03 | Should | Check calibration, subgroup performance and drift | Listed as future limitation | Model-risk acceptance report |
