@@ -235,8 +235,10 @@ def split_data(
     )
 
 def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
-    categorical = [c for c in X.columns if X[c].dtype == "object"]
-    numeric = [c for c in X.columns if c not in categorical]
+    # Pandas 3 can infer text as StringDtype instead of object. Classify
+    # numeric columns explicitly, so strings never reach median imputation.
+    numeric = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+    categorical = [c for c in X.columns if c not in numeric]
 
     numeric_pipe = Pipeline(
         [
