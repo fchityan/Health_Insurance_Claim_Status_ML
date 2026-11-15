@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -15,10 +16,11 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
     roc_auc_score,
 )
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+SOURCE_FILES = ("encounters.csv", "claims.csv", "organizations.csv", "patients.csv", "providers.csv")
 TARGET_COLUMN = "claim_status"
 DENIED_LABEL = "DENIED"
 PAID_LABEL = "PAID"
@@ -48,129 +50,189 @@ def _read_csv(data_dir: Path, filename: str) -> pd.DataFrame:
     return pd.read_csv(path)
 
 
-def load_and_prepare_data(data_dir: str | Path) -> tuple[pd.DataFrame, pd.Series]:
-    """Load source CSV files and prepare deterministic model-ready features."""
+def source_fingerprint(data_dir: str | Path) -> str:
+    """Fingerprint exact input file bytes to prevent cross-dataset holdout evaluation.
+
+    The digest is metadata only; it does not disclose claim/patient identifiers.
+    """
     root = Path(data_dir)
+    digest = hashlib.sha256()
+    for filename in SOURCE_FILES:
+        path = root / filename
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing required input file: {path}")
+        digest.update(filename.encode("utf-8") + b"\\0")
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    return digest.hexdigest()
 
-    encounters = _read_csv(root, "encounters.csv")
-    claims = _read_csv(root, "claims.csv")
-    organizations = _read_csv(root, "organizations.csv")
-    patients = _read_csv(root, "patients.csv")
-    providers = _read_csv(root, "providers.csv")
 
-    encounters = encounters.rename(
-        columns={
-            "ID": "visit_id",
-            "PATIENT": "patient_id",
-            "PROVIDER": "provider_id",
-            "ORGANIZATION": "healthcare_organization_id",
-            "ENCOUNTERCLASS": "visit_type",
-            "TOTAL_CLAIM_COST": "total_visit_claim_cost",
-        }
-    )
-    claims = claims.rename(
-        columns={
-            "ID": "claims_id",
-            "ENCOUNTER": "visit_id",
-            "PATIENT": "patient_id",
-            "PROVIDER": "provider_id",
-            "ORGANIZATION": "healthcare_organization_id",
-            "SERVICE_DATE": "service_date",
-            "CLAIM_AMOUNT": "claim_amount",
-            "STATUS": TARGET_COLUMN,
-        }
-    )
-    organizations = organizations.rename(
-        columns={
-            "ID": "healthcare_organization_id",
-            "NAME": "organization_name",
-            "CITY": "organization_city",
-            "STATE": "organization_state",
-        }
-    )
-    patients = patients.rename(
-        columns={
-            "ID": "patients_id",
-            "NAME": "patient_name",
-            "GENDER": "patient_gender",
-            "BIRTHDATE": "patient_birthdate",
-            "CITY": "patient_city",
-            "STATE": "patient_state",
-        }
-    )
-    providers = providers.rename(
-        columns={
-            "ID": "providers_id",
-            "NAME": "providers_name",
-            "SPECIALITY": "providers_speciality",
-            "GENDER": "providers_gender",
-            "ORGANIZATION": "healthcare_organization_id",
-        }
-    )
+def _require_columns(frame: pd.DataFrame, columns: list[str], source: str) -> None:
+    missing = sorted(set(columns) - set(frame.columns))
+    if missing:
+        raise ValueError(f"{source} missing required columns: {missing}")
 
+
+def _require_unique_nonnull(frame: pd.DataFrame, id_column: str, source: str) -> None:
+    if frame[id_column].isna().any() or frame[id_column].duplicated().any():
+        raise ValueError(f"{source}.{id_column} must contain unique, non-null identifiers.")
+
+
+def load_and_prepare_data_with_metadata(
+    data_dir: str | Path,
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+    """Build model features with non-feature claim/patient/date provenance.
+
+    Multiple claims may legitimately reference one encounter. Duplicate source
+    identifiers, contradictory join keys, and orphan claim encounters fail closed.
+    """
+    root = Path(data_dir)
+    encounters = _read_csv(root, "encounters.csv").rename(columns={
+        "ID": "visit_id", "PATIENT": "patient_id", "PROVIDER": "provider_id",
+        "ORGANIZATION": "healthcare_organization_id", "ENCOUNTERCLASS": "visit_type",
+        "TOTAL_CLAIM_COST": "total_visit_claim_cost",
+    })
+    claims = _read_csv(root, "claims.csv").rename(columns={
+        "ID": "claims_id", "ENCOUNTER": "visit_id", "PATIENT": "patient_id",
+        "PROVIDER": "provider_id", "ORGANIZATION": "healthcare_organization_id",
+        "SERVICE_DATE": "service_date", "CLAIM_AMOUNT": "claim_amount",
+        "STATUS": TARGET_COLUMN,
+    })
+    organizations = _read_csv(root, "organizations.csv").rename(columns={
+        "ID": "healthcare_organization_id", "NAME": "organization_name",
+        "CITY": "organization_city", "STATE": "organization_state",
+    })
+    patients = _read_csv(root, "patients.csv").rename(columns={
+        "ID": "patients_id", "GENDER": "patient_gender",
+        "BIRTHDATE": "patient_birthdate",
+    })
+    providers = _read_csv(root, "providers.csv").rename(columns={
+        "ID": "providers_id", "SPECIALITY": "providers_speciality",
+    })
+    _require_columns(encounters, [
+        "visit_id", "patient_id", "provider_id", "healthcare_organization_id",
+        "visit_type", "total_visit_claim_cost",
+    ], "encounters.csv")
+    _require_columns(claims, [
+        "claims_id", "visit_id", "patient_id", "provider_id",
+        "healthcare_organization_id", "service_date", "claim_amount", TARGET_COLUMN,
+    ], "claims.csv")
+    _require_columns(patients, ["patients_id", "patient_gender", "patient_birthdate"], "patients.csv")
+    _require_columns(providers, ["providers_id", "providers_speciality"], "providers.csv")
+    _require_columns(organizations, [
+        "healthcare_organization_id", "organization_name", "organization_city",
+    ], "organizations.csv")
+
+    for frame, column, name in [
+        (encounters, "visit_id", "encounters.csv"),
+        (claims, "claims_id", "claims.csv"),
+        (patients, "patients_id", "patients.csv"),
+        (providers, "providers_id", "providers.csv"),
+        (organizations, "healthcare_organization_id", "organizations.csv"),
+    ]:
+        _require_unique_nonnull(frame, column, name)
+
+    if claims["visit_id"].isna().any() or not claims["visit_id"].isin(encounters["visit_id"]).all():
+        raise ValueError("claims.csv contains a missing or unknown encounter ID.")
+
+    claims_for_join = claims[[
+        "claims_id", "visit_id", "patient_id", "provider_id",
+        "healthcare_organization_id", "service_date", "claim_amount", TARGET_COLUMN,
+    ]].rename(columns={
+        "patient_id": "claim_patient_id",
+        "provider_id": "claim_provider_id",
+        "healthcare_organization_id": "claim_organization_id",
+    })
     merged = encounters.merge(
-        claims[["visit_id", "service_date", "claim_amount", TARGET_COLUMN]],
-        on="visit_id",
-        how="inner",
+        claims_for_join, on="visit_id", how="inner", validate="one_to_many",
     )
+    for encounter_key, claim_key in [
+        ("patient_id", "claim_patient_id"),
+        ("provider_id", "claim_provider_id"),
+        ("healthcare_organization_id", "claim_organization_id"),
+    ]:
+        if (merged[encounter_key].isna() | merged[claim_key].isna()
+                | merged[encounter_key].ne(merged[claim_key])).any():
+            raise ValueError(f"Claim and encounter disagree on {encounter_key}.")
+
     merged = merged.merge(
         patients[["patients_id", "patient_gender", "patient_birthdate"]],
-        left_on="patient_id",
-        right_on="patients_id",
-        how="left",
+        left_on="patient_id", right_on="patients_id", how="left",
+        validate="many_to_one",
     )
     merged = merged.merge(
         organizations[["healthcare_organization_id", "organization_name", "organization_city"]],
-        on="healthcare_organization_id",
-        how="left",
+        on="healthcare_organization_id", how="left", validate="many_to_one",
     )
     merged = merged.merge(
         providers[["providers_id", "providers_speciality"]],
-        left_on="provider_id",
-        right_on="providers_id",
-        how="left",
+        left_on="provider_id", right_on="providers_id", how="left",
+        validate="many_to_one",
     )
-
-    merged["patient_birthdate"] = pd.to_datetime(merged["patient_birthdate"], errors="coerce")
-    merged["service_date"] = pd.to_datetime(merged["service_date"], errors="coerce")
-    age_days = (merged["service_date"] - merged["patient_birthdate"]).dt.days
-    merged["patient_age"] = np.floor(age_days / 365.2425)
-    merged.loc[merged["patient_age"] < 0, "patient_age"] = np.nan
+    for column in ["patients_id", "organization_name", "providers_id"]:
+        if merged[column].isna().any():
+            raise ValueError(f"Unmatched reference record after joining {column}.")
 
     merged = merged[merged[TARGET_COLUMN].isin([PAID_LABEL, DENIED_LABEL])].copy()
-
-    required = FEATURE_COLUMNS + [TARGET_COLUMN]
-    missing_cols = [c for c in required if c not in merged.columns]
-    if missing_cols:
-        raise ValueError(f"Missing required columns after merge: {missing_cols}")
-
-    model_df = merged[required].copy()
-    model_df = model_df.dropna(subset=[TARGET_COLUMN])
-    X = model_df[FEATURE_COLUMNS]
-    y = model_df[TARGET_COLUMN]
-    if y.nunique() < 2:
+    if merged.empty or merged[TARGET_COLUMN].nunique() < 2:
         raise ValueError("Dataset must contain both PAID and DENIED claims.")
+    merged["service_date"] = pd.to_datetime(merged["service_date"], errors="coerce")
+    merged["patient_birthdate"] = pd.to_datetime(merged["patient_birthdate"], errors="coerce")
+    if merged["service_date"].isna().any():
+        raise ValueError("PAID/DENIED claims must have valid service dates.")
+    age_days = (merged["service_date"] - merged["patient_birthdate"]).dt.days
+    merged["patient_age"] = np.floor(age_days / 365.2425)
+    merged.loc[(merged["patient_age"] < 0) | (merged["patient_age"] > 120), "patient_age"] = np.nan
+
+    X = merged[FEATURE_COLUMNS].reset_index(drop=True)
+    y = merged[TARGET_COLUMN].reset_index(drop=True)
+    metadata = merged[["claims_id", "patient_id", "service_date"]].reset_index(drop=True)
+    return X, y, metadata
+
+
+def load_and_prepare_data(data_dir: str | Path) -> tuple[pd.DataFrame, pd.Series]:
+    """Compatibility helper for feature inspection; training uses provenance too."""
+    X, y, _ = load_and_prepare_data_with_metadata(data_dir)
     return X, y
 
 
-def split_data(X: pd.DataFrame, y: pd.Series, random_state: int = 42) -> DatasetSplits:
-    """Create 60/20/20 train/validation/test split with stratification."""
-    X_train, X_temp, y_train, y_temp = train_test_split(
-        X,
-        y,
-        test_size=0.4,
-        random_state=random_state,
-        stratify=y,
-    )
-    X_val, X_test, y_val, y_test = train_test_split(
-        X_temp,
-        y_temp,
-        test_size=0.5,
-        random_state=random_state,
-        stratify=y_temp,
-    )
-    return DatasetSplits(X_train, X_val, X_test, y_train, y_val, y_test)
+def split_data(
+    X: pd.DataFrame,
+    y: pd.Series,
+    *,
+    groups: pd.Series,
+    random_state: int = 42,
+) -> DatasetSplits:
+    """Approximate 60/20/20 split with disjoint patient IDs across partitions.
 
+    This is a patient-grouped reference split, NOT an out-of-time evaluation.
+    Fail if the available groups cannot support both statuses in all three sets.
+    """
+    if len(X) != len(y) or len(X) != len(groups):
+        raise ValueError("X, y and patient groups must have equal length.")
+    if groups.isna().any() or groups.nunique() < 5:
+        raise ValueError("At least five non-null patient groups are required.")
+    if set(y.unique()) != {PAID_LABEL, DENIED_LABEL}:
+        raise ValueError("Only PAID and DENIED labels are supported.")
+    folds = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=random_state)
+    indices = np.arange(len(X))
+    try:
+        fold_indices = [test for _, test in folds.split(X, y, groups)]
+    except ValueError as exc:
+        raise ValueError("Not enough patient groups for grouped stratification.") from exc
+    test_idx, val_idx = fold_indices[0], fold_indices[1]
+    train_idx = np.setdiff1d(indices, np.concatenate((test_idx, val_idx)))
+    for name, chosen in [("train", train_idx), ("validation", val_idx), ("test", test_idx)]:
+        if set(y.iloc[chosen].unique()) != {PAID_LABEL, DENIED_LABEL}:
+            raise ValueError(f"{name} split lacks both PAID and DENIED labels.")
+    for left, right in [(train_idx, val_idx), (train_idx, test_idx), (val_idx, test_idx)]:
+        if set(groups.iloc[left]) & set(groups.iloc[right]):
+            raise RuntimeError("Patient-group overlap detected between splits.")
+    return DatasetSplits(
+        X.iloc[train_idx], X.iloc[val_idx], X.iloc[test_idx],
+        y.iloc[train_idx], y.iloc[val_idx], y.iloc[test_idx],
+    )
 
 def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
     categorical = [c for c in X.columns if X[c].dtype == "object"]
