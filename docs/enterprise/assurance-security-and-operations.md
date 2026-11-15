@@ -1,14 +1,14 @@
 # Model Validation, Claims Governance & Operational Assurance
 
-**Current evidence:** documented model training/evaluation scripts and unit tests; no source CSVs or verified current numerical performance published. **No clinical/insurance production approval, independent privacy review or completed claims UAT is asserted.**
+**Current evidence:** documented model scripts, patient-grouped split, source-integrity checks and synthetic-data regression tests; no source CSVs or verified current numerical performance published. **No clinical/insurance production approval, independent privacy review or completed claims UAT is asserted.**
 
 ## Assurance plan and UAT evidence register
 | Verification | Evidence required before pilot | Current state |
 |---|---|---|
 | Data approval | Permitted datasets, data dictionary, sensitive-field inventory and join audit | Not published |
 | Label validity | Manual claims-status adjudication samples, reversal and delayed-label checks | Proposed |
-| Model leakage | Entity/time grouping review, test isolation, no post-decision fields | Proposed independent review |
-| Reproducibility | Training command, seeds, dependency lock, model/hash, actual holdout metrics | Workflow exists, metrics unverified here |
+| Model leakage | Patient-grouped split and locked source SHA-256; independent temporal and feature-timing audit | Group isolation implemented; time-based review outstanding |
+| Reproducibility | Training command, seeds, source fingerprint, grouped split, test runner, independently reproduced metrics | Synthetic regression suite added; source-data metrics and dependency lock outstanding |
 | Robustness | Missed-denial and false-positive costs, calibration and subgroup error | Not independently evidenced |
 | Data privacy | Role controls, encryption, minimal use, retention and deletion tests | Proposed |
 | Business UAT | Examiner override, missing claim, wrong match, appeal, operational queue | Not executed/recorded |
