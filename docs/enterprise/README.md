@@ -1,4 +1,4 @@
-# Health Insurance Claims Analytics — Enterprise Reference Documentation
+# Health Insurance Claims Analytics
 
 **Maturity:** Exploratory, reproducible classification workflow; not a claims-adjudication product, approved BRD, clinically validated model, processed real claims service or production data-handling certification.
 
