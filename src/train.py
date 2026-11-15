@@ -14,7 +14,8 @@ from .pipeline import (
     build_preprocessor,
     denied_probability,
     evaluate_predictions,
-    load_and_prepare_data,
+    load_and_prepare_data_with_metadata,
+    source_fingerprint,
     select_threshold,
     split_data,
 )
@@ -81,8 +82,11 @@ def main() -> None:
     parser.add_argument("--random-state", type=int, default=42)
     args = parser.parse_args()
 
-    X, y = load_and_prepare_data(args.data_dir)
-    splits = split_data(X, y, random_state=args.random_state)
+    X, y, metadata = load_and_prepare_data_with_metadata(args.data_dir)
+    splits = split_data(
+        X, y, groups=metadata["patient_id"], random_state=args.random_state,
+    )
+    fingerprint = source_fingerprint(args.data_dir)
 
     candidates = [
         (
@@ -139,6 +143,8 @@ def main() -> None:
         "threshold": best_threshold,
         "random_state": args.random_state,
         "feature_columns": list(splits.X_train.columns),
+        "source_sha256": fingerprint,
+        "split_method": "stratified_patient_group_5_fold",
         "model": best_model,
     }
 
@@ -181,6 +187,14 @@ def main() -> None:
 
     summary = {
         "rows": int(len(X)),
+        "unique_patients": int(metadata["patient_id"].nunique()),
+        "split_method": "stratified_patient_group_5_fold",
+        "split_rows": {
+            "train": int(len(splits.X_train)),
+            "validation": int(len(splits.X_val)),
+            "test": int(len(splits.X_test)),
+        },
+        "source_sha256": fingerprint,
         "features": list(X.columns),
         "best_model": best_name,
         "selected_threshold": best_threshold,
