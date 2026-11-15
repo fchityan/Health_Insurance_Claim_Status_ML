@@ -1,8 +1,22 @@
-# Cost-Sensitive Claim Status Classification
+# Health Insurance Claim Status — Claims Analytics, ML Solution Design & Model Assurance
 
 A reproducible binary-classification project for predicting whether a claim is `PAID` or `DENIED`, with emphasis on decision-threshold optimization, model comparison, and reducing costly missed denials.
 
 The original notebook, `Health_Insurance_Claim_Status_ML.ipynb`, is preserved. The repository now includes a stronger scriptable ML workflow designed to showcase reproducible modeling and production-oriented engineering rather than notebook-only analysis.
+
+## Business Analysis, Solution Design & Model Assurance
+
+This project presents a reproducible approach to identifying claim-denial risk for **human review and prioritisation**. The material documents a modelling reference, not an automated claim payment decision or a production insurance deployment.
+
+| Delivery Area | Supporting Evidence |
+|---|---|
+| Claims-status exploratory analysis | [Original analysis notebook](Health_Insurance_Claim_Status_ML.ipynb) |
+| Data preparation, feature engineering & input controls | [Classification pipeline](src/pipeline.py) |
+| Model comparison & validation-only threshold selection | [Training workflow](src/train.py) |
+| Holdout evaluation & reporting workflow | [Evaluation script](src/evaluate.py) |
+| Automated quality checks | [Unit tests](tests/test_pipeline.py) |
+
+The source CSV datasets are not committed, and no unverified numerical model-performance claim is made.
 
 ## What the project demonstrates
 
