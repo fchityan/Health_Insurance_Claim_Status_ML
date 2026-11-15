@@ -18,6 +18,10 @@ This project presents a reproducible approach to identifying claim-denial risk f
 
 The source CSV datasets are not committed, and no unverified numerical model-performance claim is made.
 
+## Enterprise-Style Documentation (Reference, Not Claims Adjudication Approval)
+
+[Claims business requirements, data/integration design, independent validation plan, privacy/security and operational controls](docs/enterprise/README.md). These are proposed enterprise artefacts grounded in the existing prototype, not evidence of live claims decisions or regulatory approval.
+
 ## What the project demonstrates
 
 - Multi-table feature assembly from encounters, claims, patients, providers, and organizations
