@@ -1,16 +1,16 @@
 # Claims Data Architecture, Feature Contract & Decision Support
 
-**Status:** Scriptable ML prototype; no claim-system/API integration verified.
+**Status:** Scriptable ML prototype; no claim-system/API integration verified. Patient-group disjointness and source-fingerprint checks are implemented; **temporal validity, approved decision-time features and external validation remain unresolved**.
 
 ```text
 Authorised encounters / claims / patients / providers / organizations CSVs
   → multi-table assembly and deterministic age-at-service feature
   → type checks; numeric median & categorical mode imputation
   → one-hot encoding and consistent train-only fit
-  → stratified 60% train / 20% validation / 20% locked test
+  → five-fold patient-grouped splitting (approximately 60%/20%/20%)
   → Logistic Regression / Random Forest / Gradient Boosting
   → validation model ranking and DENIED F2 threshold
-  → serialised model bundle → post-selection test report
+  → serialised model bundle + SHA-256 source fingerprint → locked evaluation
   → hypothetical claims-review queue (not implemented)
 ```
 
@@ -29,7 +29,7 @@ Authorised encounters / claims / patients / providers / organizations CSVs
 ## Architectural decisions
 - **ADR-HC-01:** Use denied-class F2 because missing likely denials is treated as an important *review-priority* error; cost weights remain hypothetical.
 - **ADR-HC-02:** Select model/threshold only on training/validation and preserve untouched test.
-- **ADR-HC-03:** Group related claim events by appropriate patient/claim/time where needed; independently evaluate whether stratified record-level splits cause entity or temporal leakage.
+- **ADR-HC-03:** Use disjoint patient groups across train/validation/test via stratified five-fold splitting; this reduces repeat-patient leakage but is **not** an out-of-time evaluation. Independently verify feature availability as of a real decision timestamp.
 - **ADR-HC-04:** Model scores are not adjudication authority; operational human review is mandatory for real decisions.
 - **ADR-HC-05:** Claims and health-related features require minimisation, privacy review, protected storage and controlled audit access before usage.
 
