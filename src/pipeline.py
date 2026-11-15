@@ -18,7 +18,7 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
 SOURCE_FILES = ("encounters.csv", "claims.csv", "organizations.csv", "patients.csv", "providers.csv")
 TARGET_COLUMN = "claim_status"
@@ -234,6 +234,11 @@ def split_data(
         y.iloc[train_idx], y.iloc[val_idx], y.iloc[test_idx],
     )
 
+def _normalize_categorical_missing_values(frame: pd.DataFrame) -> pd.DataFrame:
+    """Convert StringDtype's pd.NA to np.nan for sklearn's SimpleImputer."""
+    return frame.astype(object).where(pd.notna(frame), np.nan)
+
+
 def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
     # Pandas 3 can infer text as StringDtype instead of object. Classify
     # numeric columns explicitly, so strings never reach median imputation.
@@ -248,6 +253,9 @@ def build_preprocessor(X: pd.DataFrame) -> ColumnTransformer:
     )
     categorical_pipe = Pipeline(
         [
+            ("normalize_missing", FunctionTransformer(
+                _normalize_categorical_missing_values, validate=False,
+            )),
             ("imputer", SimpleImputer(strategy="most_frequent")),
             ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
         ]
