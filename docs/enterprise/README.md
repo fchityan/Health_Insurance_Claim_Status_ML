@@ -1,15 +1,18 @@
-# Historical Denial-Risk Screening — Insurance Claims Analytics
+# Insurance Claims Analytics — Solution Design and Governance
 
-**Maturity:** Exploratory, reproducible classification workflow; not a claims-adjudication product, approved BRD, clinically validated model, processed real claims service or production data-handling certification.
+This collection brings together the **business, technical and governance artefacts** for a historical denial-risk screening research prototype. The proposed outcome is an aid to claims-examiner prioritisation, not an automated decision about coverage, payment or fraud.
 
-This package extends the existing [model repository](../../README.md) with business analysis, decision-support architecture, model risk, privacy controls, acceptance planning and operational handover.
+## Documentation library
 
-| Coverage | Document | Existing implementation evidence |
+| Workstream | Document | Focus |
 |---|---|---|
-| Claims business problem, process, stakeholders and traceability | [Business requirements](business-requirements-and-traceability.md) | [Notebook](../../Health_Insurance_Claim_Status_ML.ipynb) |
-| Inputs, feature timing, inference architecture and design decisions | [Architecture & data contracts](solution-architecture-and-data-contracts.md) | [Pipeline](../../src/pipeline.py), [training](../../src/train.py) |
-| Validation, fairness, health-data security, incident and human review | [Assurance & operations](assurance-security-and-operations.md) | [Evaluation workflow](../../src/evaluate.py), [tests](../../tests/test_pipeline.py) |
-| Prioritised gaps, evidence maturity and release gates | [Validation Gap Register](validation-gap-register.md) | [Synthetic integrity tests](../../tests/test_integrity.py) |
-| P0 decision point, input safety and external evidence requirements | [P0 Evidence and Data Gates](p0-evidence-gates.md) | Versioned restricted feature profile; authorised performance still OPEN |
+| Business analysis and requirements | [Business requirements and traceability](business-requirements-and-traceability.md) | Proposed operating problem, stakeholders, decision rights and acceptance criteria |
+| Solution architecture and data design | [Architecture and data contracts](solution-architecture-and-data-contracts.md) | Data lineage, conservative feature scope, technical design and integration considerations |
+| Model validation and operational assurance | [Assurance, security and operations](assurance-security-and-operations.md) | Performance-validation approach, privacy, human review, controls and operational readiness |
+| Validation and risk management | [Validation and risk register](validation-gap-register.md) | Implemented safeguards, outstanding evidence and acceptance prerequisites |
 
-**Evidence inventory:** implementation and tests are *documented*; candidate business requirements are *proposed*; source CSVs, locked-test metrics on the current dataset, business UAT, approved privacy assessment and production operation are *not evidenced*.
+## Implementation references
+
+The corresponding software is available in the [data pipeline](../../src/pipeline.py), [training workflow](../../src/train.py), [evaluation workflow](../../src/evaluate.py) and [synthetic regression tests](../../tests/test_integrity.py).
+
+**Project maturity:** The pipeline and automated tests are implemented. Independent results on authorised historical data, a verified prediction-time feature audit, operational examiner testing and production approvals have not been demonstrated. All business and integration materials describe a proposed approach, not an insurer-approved production solution.

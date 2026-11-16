@@ -1,86 +1,100 @@
 # Health Insurance Claims — Historical Denial-Risk Screening for Human Review
 
-**Portfolio research prototype · historical claim-status classification · not automated claims adjudication**
+**Insurance Analytics · Machine Learning · Claims Operations · Decision Support**
 
-This project explores whether limited information available around claim intake could help an insurance examiner **prioritise some submissions for earlier human review**. Its supervised target is a historically recorded `PAID` or `DENIED` **status**, *not* medical necessity, fraud, coverage entitlement, the correctness of an earlier decision, or a recommendation to deny a claim.
+## Project overview
 
-**Validation status: NOT VERIFIED ON AUTHORISED SOURCE DATA.** Source CSVs are not in this repository, updated holdout accuracy is not independently reproduced, and no production or insurer approval is implied. The original notebook is historical academic exploration; its statistical tests about provider costs address a *different* question and do **not** establish fraud.
+This project investigates whether historical health insurance claims data can support **earlier human review of submissions that may be associated with a recorded denial outcome**. It combines insurance operations knowledge with reproducible machine learning, data-quality controls and model-evaluation practices.
 
-## Intended decision and explicit boundary
+The intended application is **claims-review prioritisation**, not automated claim adjudication. The model learns from historical `PAID` and `DENIED` statuses; those records do **not** establish whether a claim was correctly paid or denied, whether coverage applies or whether fraud occurred.
 
-| Question | Research-prototype answer |
+| Business consideration | Proposed approach |
 |---|---|
-| **Who might use it?** | A claims examiner or operations lead overseeing an ordinary manual review queue |
-| **When could a score be calculated?** | **After claim intake and encounter context are available, before any adjudication, settlement or status update** (proposed; no intake timestamps are present to verify this in the source) |
-| **What is predicted?** | The probability of the **historically recorded `DENIED` outcome** under the available labels, not whether the claim *ought* to be denied |
-| **What could the output influence?** | *Review priority only*, after an insurer has approved the use case, costs, fairness controls and examiner capacity |
-| **Who makes the final decision?** | An authorised human examiner following the policy and established claims process |
-| **What is prohibited?** | Using the score to automatically refuse benefits, assert fraud, infer policy eligibility or represent actual operational improvement |
+| **Business challenge** | Claims teams need consistent ways to identify cases that may warrant earlier examination |
+| **Intended users** | Claims examiners and operations managers |
+| **Decision point** | After claim intake and availability of encounter context, before adjudication or settlement |
+| **Analytical output** | An estimated probability associated with a historically recorded denial status |
+| **Human oversight** | An authorised examiner retains full responsibility for reviewing and deciding claims |
+| **Potential value to evaluate** | More relevant cases identified at a fixed review capacity, without disproportionate false escalations |
 
-**Research success criteria to validate, not achieved results:** Compare against ordinary queue ordering and always-PAID/always-DENIED baselines; report precision/recall of historically denied claims at a *fixed examiner review capacity*, the number of false escalations and, where valid, workload or avoidable rework. Objectives, cutoff, cost weights, label maturity and acceptance targets require claims-owner approval.
+The decision point is a proposed design, **not yet verified against the timestamps in an authorised dataset**. No real insurer has approved or deployed this workflow.
 
-## P0 safety change: conservative feature profile
+## Solution approach
 
-The maintained ML pipeline now uses a single **`pre_adjudication_minimal_v1`** feature profile:
+```text
+Historical claims and reference datasets
+        ↓
+Data-quality checks and record reconciliation
+        ↓
+Limited intake-stage feature engineering
+        ↓
+Patient-separated training and validation
+        ↓
+Model comparison and threshold selection
+        ↓
+Locked holdout evaluation and baseline comparison
+        ↓
+Research outputs for potential human-review prioritisation
+```
 
-| Model input | Proposed origin | Evidence gap |
+The maintained classification pipeline joins encounters, claims, patients, providers and organisations with strict identifier and relationship checks. It handles missing values using fitted preprocessing pipelines and compares **Logistic Regression, Random Forest and Gradient Boosting**.
+
+### Feature selection and safeguards
+
+The current reference model uses only the following proposed intake-stage predictors:
+
+| Feature | Description |
+|---|---|
+| `visit_type` | Encounter classification |
+| `patient_age` | Age derived from birthdate and service date |
+
+Claim amount, total visit cost and patient gender are excluded from the default feature set. Claim status is the **historical training label only**, never an input feature. Missing, pending or unexpected status values are rejected rather than silently discarded.
+
+These controls reduce potential leakage and unnecessary feature exposure, but **do not independently confirm that the two inputs were available at the exact historical prediction time**.
+
+## Model development and evaluation
+
+- **Data preparation:** Referential integrity checks, feature preprocessing and deterministic age-at-service calculation.
+- **Data splitting:** Patient-separated train, validation and test partitions (approximately 60% / 20% / 20%). This is not a future-period holdout.
+- **Model comparison:** Three classification algorithms, selected on validation average precision with DENIED-class F2 as a tie-breaker.
+- **Threshold selection:** Validation-only tuning of an illustrative recall-weighted threshold, separate from the locked test set.
+- **Evaluation outputs:** Confusion matrix, DENIED precision/recall/F1/F2, ROC-AUC, average precision and always-PAID/always-DENIED baselines.
+- **Reproducibility:** Source-file fingerprints, versioned model feature contract and automated tests using synthetic records.
+
+**Validation status:** Automated tests verify software behaviour; they do **not** establish real-world prediction quality. The original authorised CSV inputs are not published, and results for the updated pipeline have not been independently reproduced on those data. A genuine operational assessment still requires approved outcome definitions, feature-timing checks, out-of-time validation, examiner-capacity analysis and privacy review.
+
+## Solution components and documentation
+
+| Area | Deliverable | Documentation / source |
 |---|---|---|
-| `visit_type` | Encounter classification | Prove it is populated **at or before** claim intake |
-| `patient_age` | Derived from birthdate and service date | Prove both dates are permitted and available at the defined cutoff |
+| **Business analysis** | Proposed claims-review use case, stakeholders, requirements and decision rights | [Business requirements and traceability](docs/enterprise/business-requirements-and-traceability.md) |
+| **Data engineering** | Multi-source assembly, integrity checks and limited feature preparation | [Data processing pipeline](src/pipeline.py) |
+| **Predictive modelling** | Model training, comparison and research threshold selection | [Model training workflow](src/train.py) |
+| **Model evaluation** | Locked holdout reporting, baseline comparison and provenance checks | [Evaluation workflow](src/evaluate.py) |
+| **Quality assurance** | Synthetic regression tests for data joins, patient separation, label handling and feature safety | [Pipeline tests](tests/test_pipeline.py) · [Data-integrity tests](tests/test_integrity.py) |
+| **Solution architecture** | Reference design, data contracts and technical decision record | [Architecture and data design](docs/enterprise/solution-architecture-and-data-contracts.md) |
+| **Model governance** | Validation requirements, limitations, privacy considerations and operational controls | [Model assurance and operations](docs/enterprise/assurance-security-and-operations.md) · [Validation register](docs/enterprise/validation-gap-register.md) |
+| **Exploratory research** | Original academic analysis of provider costs, separate from the current status-prediction workflow | [Historical analysis notebook](Health_Insurance_Claim_Status_ML.ipynb) |
 
-The **default pipeline does not train on** `claim_amount`, `total_visit_claim_cost`, `patient_gender`, patient/claim identifiers or historical claim status (except the status as training target). Cost fields could be calculated or amended after the decision and are **unapproved for this stage**; gender is omitted to minimise sensitive/proxy features. These exclusions reduce known leakage risks but **do not prove as-of-time validity**. A data owner must confirm the feature timestamps and intended operational point before any claims-use conclusion.
+## Reproducing the research workflow
 
-Unknown, missing, pending or non-final claim-status labels now cause training to **fail closed** rather than silently excluding those records. The data owner must supply an authorised cohort with an agreed final-status observation window, including a documented rule for reversals and appeals.
-
-Older model artifacts using the previous feature set are deliberately rejected by the evaluator and **must be retrained**.
-
-## Implemented technical evidence
-
-- Multi-table referential checks for encounters, claims, patients, providers and organisations; inconsistent IDs and ambiguous joins fail closed.
-- Stable age-at-service engineering, safe handling of missing features and categorical encoding in scikit-learn pipelines.
-- Patient-separated stratified train/validation/test folds (approximately 60%/20%/20%); these **are not** an out-of-time validation.
-- Logistic Regression, Random Forest and Gradient Boosting, compared on validation average precision with DENIED F2 as a tie-break.
-- Validation-only threshold selection, a locked test evaluation path, source SHA-256 fingerprint and strict feature-profile checks.
-- Always-PAID and always-DENIED comparisons so predicting every case as DENIED cannot be mistaken for useful recall.
-- Synthetic-only regression tests for missing features, unsafe claim labels, join errors, group leakage, legacy model protection and reproducible evaluation.
-
-The selection threshold remains a **research heuristic**, not an approved examiner workload rule. The test report is stamped `unverified_local_holdout_research_only`, `independently_reproduced: false`, `out_of_time_validated: false` and `deployment_approved: false` even when numerical metrics are generated locally.
-
-## Reproduce safely
-
-Use only datasets you are authorised to process. The required local CSV files are `encounters.csv`, `claims.csv`, `patients.csv`, `providers.csv`, and `organizations.csv`. The source CSVs are **not committed**, nor are model artifacts or outputs.
+The model expects authorised local copies of `encounters.csv`, `claims.csv`, `patients.csv`, `providers.csv` and `organizations.csv`. The source files and generated artefacts are not included in this public repository.
 
 ```bash
 python -m pip install -r requirements.txt
 python -m pytest -q
 
-# Train three models on a locally authorised mature-label cohort
-python -m src.train --data-dir . --model-out artifacts/best_model.joblib \
+python -m src.train --data-dir . \
+  --model-out artifacts/best_model.joblib \
   --outputs-dir outputs --threshold auto
 
-# Evaluate the locked grouped holdout, using the exact same source file bytes
-python -m src.evaluate --data-dir . --model-path artifacts/best_model.joblib \
+python -m src.evaluate --data-dir . \
+  --model-path artifacts/best_model.joblib \
   --outputs-dir outputs
 ```
 
-Outputs include validation comparisons, a locked-test classification report, DENIED precision/recall/F1/F2, ROC-AUC, average precision, a confusion matrix, two trivial baselines, source fingerprints and an explicitly **unverified** evidence label. Do not publish row-level data, source files or generated metrics from unauthorised/untested datasets. `joblib` loading can execute code: evaluate trusted local models only.
+Only use data you are authorised to process and trusted local model artefacts. The evaluation output is explicitly marked as unverified research evidence until independent replication and approval. Older model artefacts using the prior feature profile must be retrained.
 
-The source data are not available in this repository; **no independent performance claim can currently be made**. If authorised data later become available, run the locked evaluation, repeat it independently, verify as-of feature availability, evaluate out-of-time generalisation and report the results *with denominator, date window, uncertainty and baseline*.
+## Project scope and limitations
 
-## Project map
-
-| Purpose | Evidence |
-|---|---|
-| Current feature/join/split implementation | [Data pipeline](src/pipeline.py) |
-| Model training and threshold selection | [Training workflow](src/train.py) |
-| Locked evaluation and evidence flags | [Evaluation workflow](src/evaluate.py) |
-| Synthetic regression tests | [Pipeline tests](tests/test_pipeline.py) · [Integrity tests](tests/test_integrity.py) |
-| Business requirement and decision boundary | [Claims business requirements](docs/enterprise/business-requirements-and-traceability.md) |
-| Model assurance and outstanding risks | [Validation gap register](docs/enterprise/validation-gap-register.md) |
-| How to establish external evidence | [P0 evidence and data gates](docs/enterprise/p0-evidence-gates.md) |
-| Architecture and governance | [Enterprise documentation](docs/enterprise/README.md) |
-| Original, separate exploratory provider-cost research | [Historical academic notebook](Health_Insurance_Claim_Status_ML.ipynb) |
-
-### Release position
-
-The code implements safer defaults and reproducibility controls, but **none of the business, external-data, temporal-validation, examiner acceptance or privacy gates are approved**. The application is a technical/reference project only; not a real-time claim-decision or claims-review service.
+This is a **research and portfolio implementation**, not a deployed claims-processing service. It does not automate payment or denial decisions, establish fraud or coverage eligibility, or demonstrate measured operational savings. Real-world use would require independently validated performance on appropriately mature claims outcomes, confirmed prediction-time feature availability, legal and privacy review, and human-examiner acceptance.

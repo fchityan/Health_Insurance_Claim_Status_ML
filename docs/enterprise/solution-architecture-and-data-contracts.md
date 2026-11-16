@@ -41,4 +41,4 @@ Authorised encounters / claims / patients / providers / organizations CSVs
 Claims intake/queue API, source freshness, claim amendments, prediction timing, reviewer explanation UX, integration retries, idempotent re-scoring, batch limits, audit events, role-based access, appeal/override and feedback capture. No deployed service is asserted.
 
 
-For data-custodian and performance evidence requirements see [P0 evidence and data gates](p0-evidence-gates.md).
+For data provenance, performance validation and operational prerequisites, see [Model assurance and operations](assurance-security-and-operations.md) and the [validation and risk register](validation-gap-register.md).
