@@ -47,16 +47,16 @@ def synthetic_claim_files(tmp_path):
                 "SERVICE_DATE": "2020-01-20", "CLAIM_AMOUNT": 50 + 2 * i + j,
                 "STATUS": "PAID" if j == 0 else "DENIED",
             })
-    pd.DataFrame(encounters).to_csv(tmp_path / "encounters.csv", index=False)
-    pd.DataFrame(claims).to_csv(tmp_path / "claims.csv", index=False)
-    pd.DataFrame(patients).to_csv(tmp_path / "patients.csv", index=False)
+    pd.DataFrame(encounters).to_csv(tmp_path / "private_a.csv", index=False)
+    pd.DataFrame(claims).to_csv(tmp_path / "private_b.csv", index=False)
+    pd.DataFrame(patients).to_csv(tmp_path / "private_d.csv", index=False)
     pd.DataFrame([{"ID": "provider-1", "SPECIALITY": "GENERAL PRACTICE"}]).to_csv(
-        tmp_path / "providers.csv", index=False
+        tmp_path / "private_e.csv", index=False
     )
     pd.DataFrame([{
         "ID": "org-1", "NAME": "Training Organization",
         "CITY": "Example City",
-    }]).to_csv(tmp_path / "organizations.csv", index=False)
+    }]).to_csv(tmp_path / "private_c.csv", index=False)
     return tmp_path
 
 
@@ -84,7 +84,7 @@ def test_group_split_rejects_insufficient_groups():
 
 
 def test_duplicate_encounter_identifier_fails_closed(synthetic_claim_files):
-    path = synthetic_claim_files / "encounters.csv"
+    path = synthetic_claim_files / "private_a.csv"
     df = pd.read_csv(path)
     df.loc[1, "ID"] = df.loc[0, "ID"]
     df.to_csv(path, index=False)
@@ -93,7 +93,7 @@ def test_duplicate_encounter_identifier_fails_closed(synthetic_claim_files):
 
 
 def test_orphan_claim_fails_closed(synthetic_claim_files):
-    path = synthetic_claim_files / "claims.csv"
+    path = synthetic_claim_files / "private_b.csv"
     df = pd.read_csv(path)
     df.loc[0, "ENCOUNTER"] = "absent-visit"
     df.to_csv(path, index=False)
@@ -102,7 +102,7 @@ def test_orphan_claim_fails_closed(synthetic_claim_files):
 
 
 def test_claim_encounter_patient_mismatch_fails_closed(synthetic_claim_files):
-    path = synthetic_claim_files / "claims.csv"
+    path = synthetic_claim_files / "private_b.csv"
     df = pd.read_csv(path)
     df.loc[0, "PATIENT"] = "p1"
     df.to_csv(path, index=False)
@@ -111,7 +111,7 @@ def test_claim_encounter_patient_mismatch_fails_closed(synthetic_claim_files):
 
 
 def test_missing_dimension_record_fails_closed(synthetic_claim_files):
-    path = synthetic_claim_files / "patients.csv"
+    path = synthetic_claim_files / "private_d.csv"
     df = pd.read_csv(path)
     df = df.loc[df["ID"] != "p0"]
     df.to_csv(path, index=False)
@@ -120,7 +120,7 @@ def test_missing_dimension_record_fails_closed(synthetic_claim_files):
 
 
 def test_multiple_claims_per_encounter_do_not_multiply_rows(synthetic_claim_files):
-    path = synthetic_claim_files / "claims.csv"
+    path = synthetic_claim_files / "private_b.csv"
     df = pd.read_csv(path)
     extra = df.iloc[[0]].copy()
     extra["ID"] = "extra-claim"
@@ -135,7 +135,7 @@ def test_dataset_fingerprint_detects_changes(synthetic_claim_files):
     original = source_fingerprint(synthetic_claim_files)
     assert len(original) == 64
     assert source_fingerprint(synthetic_claim_files) == original
-    path = synthetic_claim_files / "claims.csv"
+    path = synthetic_claim_files / "private_b.csv"
     df = pd.read_csv(path)
     df.loc[0, "CLAIM_AMOUNT"] = 999
     df.to_csv(path, index=False)
@@ -174,9 +174,9 @@ def test_train_evaluate_and_reject_changed_data(synthetic_claim_files, tmp_path)
     assert "baseline_all_denied" in payload
     assert "baseline_all_paid" in payload
     assert len(pd.read_csv(outputs / "test_predictions.csv")) == payload["split_rows"]["test"]
-    data = pd.read_csv(synthetic_claim_files / "claims.csv")
+    data = pd.read_csv(synthetic_claim_files / "private_b.csv")
     data.loc[0, "CLAIM_AMOUNT"] += 1
-    data.to_csv(synthetic_claim_files / "claims.csv", index=False)
+    data.to_csv(synthetic_claim_files / "private_b.csv", index=False)
     failed = subprocess.run(evaluate, check=False, capture_output=True, text=True)
     assert failed.returncode != 0
     assert "Source CSV files differ" in failed.stderr
@@ -190,9 +190,9 @@ def test_intake_features_ignore_excluded_cost_and_gender_values(synthetic_claim_
     assert "patient_gender" not in original.columns
 
     changes = [
-        ("claims.csv", "CLAIM_AMOUNT", 999999.0),
-        ("encounters.csv", "TOTAL_CLAIM_COST", 9999999.0),
-        ("patients.csv", "GENDER", "X"),
+        ("private_b.csv", "CLAIM_AMOUNT", 999999.0),
+        ("private_a.csv", "TOTAL_CLAIM_COST", 9999999.0),
+        ("private_d.csv", "GENDER", "X"),
     ]
     for filename, col, replacement in changes:
         path = synthetic_claim_files / filename
@@ -206,9 +206,9 @@ def test_intake_features_ignore_excluded_cost_and_gender_values(synthetic_claim_
 
 def test_missing_unapproved_cost_gender_columns_are_accepted(synthetic_claim_files):
     for filename, col in [
-        ("claims.csv", "CLAIM_AMOUNT"),
-        ("encounters.csv", "TOTAL_CLAIM_COST"),
-        ("patients.csv", "GENDER"),
+        ("private_b.csv", "CLAIM_AMOUNT"),
+        ("private_a.csv", "TOTAL_CLAIM_COST"),
+        ("private_d.csv", "GENDER"),
     ]:
         path = synthetic_claim_files / filename
         df = pd.read_csv(path).drop(columns=[col])
@@ -220,7 +220,7 @@ def test_missing_unapproved_cost_gender_columns_are_accepted(synthetic_claim_fil
 
 
 def test_unknown_or_pending_claim_label_fails_closed(synthetic_claim_files):
-    path = synthetic_claim_files / "claims.csv"
+    path = synthetic_claim_files / "private_b.csv"
     df = pd.read_csv(path)
     df.loc[0, "STATUS"] = "PENDING"
     df.to_csv(path, index=False)

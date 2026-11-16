@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import os
 from pathlib import Path
 
 import numpy as np
@@ -20,7 +21,7 @@ from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
-SOURCE_FILES = ("encounters.csv", "claims.csv", "organizations.csv", "patients.csv", "providers.csv")
+SOURCE_FILES = ("ENCOUNTERS_DATA_PATH", "CLAIMS_DATA_PATH", "ORGANIZATIONS_DATA_PATH", "PATIENTS_DATA_PATH", "PROVIDERS_DATA_PATH")
 TARGET_COLUMN = "claim_status"
 DENIED_LABEL = "DENIED"
 PAID_LABEL = "PAID"
@@ -48,10 +49,20 @@ class DatasetSplits:
     y_test: pd.Series
 
 
-def _read_csv(data_dir: Path, filename: str) -> pd.DataFrame:
-    path = data_dir / filename
-    if not path.exists():
-        raise FileNotFoundError(f"Missing required input file: {path}")
+def _resolve_source_path(data_dir: Path, source_key: str) -> Path:
+    value = os.environ.get(source_key)
+    if not value:
+        raise FileNotFoundError(
+            f"Private source not configured: {source_key}. Set this environment variable."
+        )
+    path = Path(value).expanduser()
+    return path if path.is_absolute() else data_dir / path
+
+
+def _read_csv(data_dir: Path, source_key: str) -> pd.DataFrame:
+    path = _resolve_source_path(data_dir, source_key)
+    if not path.is_file():
+        raise FileNotFoundError(f"Configured source not found: {source_key}")
     return pd.read_csv(path)
 
 
@@ -62,11 +73,11 @@ def source_fingerprint(data_dir: str | Path) -> str:
     """
     root = Path(data_dir)
     digest = hashlib.sha256()
-    for filename in SOURCE_FILES:
-        path = root / filename
+    for source_key in SOURCE_FILES:
+        path = _resolve_source_path(root, source_key)
         if not path.is_file():
-            raise FileNotFoundError(f"Missing required input file: {path}")
-        digest.update(filename.encode("utf-8") + b"\\0")
+            raise FileNotFoundError(f"Configured source not found: {source_key}")
+        digest.update(source_key.encode("utf-8") + b"\\0")
         with path.open("rb") as handle:
             for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                 digest.update(chunk)
@@ -93,53 +104,53 @@ def load_and_prepare_data_with_metadata(
     identifiers, contradictory join keys, and orphan claim encounters fail closed.
     """
     root = Path(data_dir)
-    encounters = _read_csv(root, "encounters.csv").rename(columns={
+    encounters = _read_csv(root, "ENCOUNTERS_DATA_PATH").rename(columns={
         "ID": "visit_id", "PATIENT": "patient_id", "PROVIDER": "provider_id",
         "ORGANIZATION": "healthcare_organization_id", "ENCOUNTERCLASS": "visit_type",
         "TOTAL_CLAIM_COST": "total_visit_claim_cost",
     })
-    claims = _read_csv(root, "claims.csv").rename(columns={
+    claims = _read_csv(root, "CLAIMS_DATA_PATH").rename(columns={
         "ID": "claims_id", "ENCOUNTER": "visit_id", "PATIENT": "patient_id",
         "PROVIDER": "provider_id", "ORGANIZATION": "healthcare_organization_id",
         "SERVICE_DATE": "service_date", "CLAIM_AMOUNT": "claim_amount",
         "STATUS": TARGET_COLUMN,
     })
-    organizations = _read_csv(root, "organizations.csv").rename(columns={
+    organizations = _read_csv(root, "ORGANIZATIONS_DATA_PATH").rename(columns={
         "ID": "healthcare_organization_id", "NAME": "organization_name",
         "CITY": "organization_city", "STATE": "organization_state",
     })
-    patients = _read_csv(root, "patients.csv").rename(columns={
+    patients = _read_csv(root, "PATIENTS_DATA_PATH").rename(columns={
         "ID": "patients_id", "GENDER": "patient_gender",
         "BIRTHDATE": "patient_birthdate",
     })
-    providers = _read_csv(root, "providers.csv").rename(columns={
+    providers = _read_csv(root, "PROVIDERS_DATA_PATH").rename(columns={
         "ID": "providers_id", "SPECIALITY": "providers_speciality",
     })
     _require_columns(encounters, [
         "visit_id", "patient_id", "provider_id", "healthcare_organization_id",
         "visit_type",
-    ], "encounters.csv")
+    ], "ENCOUNTERS_DATA_PATH")
     _require_columns(claims, [
         "claims_id", "visit_id", "patient_id", "provider_id",
         "healthcare_organization_id", "service_date", TARGET_COLUMN,
-    ], "claims.csv")
-    _require_columns(patients, ["patients_id", "patient_birthdate"], "patients.csv")
-    _require_columns(providers, ["providers_id", "providers_speciality"], "providers.csv")
+    ], "CLAIMS_DATA_PATH")
+    _require_columns(patients, ["patients_id", "patient_birthdate"], "PATIENTS_DATA_PATH")
+    _require_columns(providers, ["providers_id", "providers_speciality"], "PROVIDERS_DATA_PATH")
     _require_columns(organizations, [
         "healthcare_organization_id", "organization_name", "organization_city",
-    ], "organizations.csv")
+    ], "ORGANIZATIONS_DATA_PATH")
 
     for frame, column, name in [
-        (encounters, "visit_id", "encounters.csv"),
-        (claims, "claims_id", "claims.csv"),
-        (patients, "patients_id", "patients.csv"),
-        (providers, "providers_id", "providers.csv"),
-        (organizations, "healthcare_organization_id", "organizations.csv"),
+        (encounters, "visit_id", "ENCOUNTERS_DATA_PATH"),
+        (claims, "claims_id", "CLAIMS_DATA_PATH"),
+        (patients, "patients_id", "PATIENTS_DATA_PATH"),
+        (providers, "providers_id", "PROVIDERS_DATA_PATH"),
+        (organizations, "healthcare_organization_id", "ORGANIZATIONS_DATA_PATH"),
     ]:
         _require_unique_nonnull(frame, column, name)
 
     if claims["visit_id"].isna().any() or not claims["visit_id"].isin(encounters["visit_id"]).all():
-        raise ValueError("claims.csv contains a missing or unknown encounter ID.")
+        raise ValueError("CLAIMS_DATA_PATH contains a missing or unknown encounter ID.")
 
     claims_for_join = claims[[
         "claims_id", "visit_id", "patient_id", "provider_id",

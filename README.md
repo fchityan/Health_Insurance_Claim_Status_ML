@@ -78,7 +78,7 @@ These controls reduce potential leakage and unnecessary feature exposure, but **
 
 ## Reproducing the research workflow
 
-The model expects five authorised local source CSVs for encounters, claims, patients, providers and organisations. Their physical filenames are not documented publicly. The source files and generated artefacts are not included in this public repository.
+The model expects five authorised local source CSVs for encounters, claims, patients, providers and organisations. Their physical filenames are not documented publicly. Set the `ENCOUNTERS_DATA_PATH`, `CLAIMS_DATA_PATH`, `ORGANIZATIONS_DATA_PATH`, `PATIENTS_DATA_PATH` and `PROVIDERS_DATA_PATH` environment variables to their local paths before training or evaluation. The source files and generated artefacts are not included in this public repository.
 
 ```bash
 python -m pip install -r requirements.txt

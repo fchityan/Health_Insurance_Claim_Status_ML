@@ -60,7 +60,7 @@ def test_patient_age_uses_service_date(tmp_path) -> None:
             "ENCOUNTERCLASS": ["ambulatory", "emergency"],
             "TOTAL_CLAIM_COST": [100.0, 200.0],
         }
-    ).to_csv(tmp_path / "encounters.csv", index=False)
+    ).to_csv(tmp_path / "private_a.csv", index=False)
 
     pd.DataFrame(
         {
@@ -73,7 +73,7 @@ def test_patient_age_uses_service_date(tmp_path) -> None:
             "CLAIM_AMOUNT": [80.0, 150.0],
             "STATUS": ["PAID", "DENIED"],
         }
-    ).to_csv(tmp_path / "claims.csv", index=False)
+    ).to_csv(tmp_path / "private_b.csv", index=False)
 
     pd.DataFrame(
         {
@@ -84,11 +84,11 @@ def test_patient_age_uses_service_date(tmp_path) -> None:
             "CITY": ["X"],
             "STATE": ["Y"],
         }
-    ).to_csv(tmp_path / "patients.csv", index=False)
+    ).to_csv(tmp_path / "private_d.csv", index=False)
 
     pd.DataFrame(
         {"ID": ["o1"], "NAME": ["Org"], "CITY": ["X"], "STATE": ["Y"]}
-    ).to_csv(tmp_path / "organizations.csv", index=False)
+    ).to_csv(tmp_path / "private_c.csv", index=False)
 
     pd.DataFrame(
         {
@@ -98,7 +98,7 @@ def test_patient_age_uses_service_date(tmp_path) -> None:
             "GENDER": ["M"],
             "ORGANIZATION": ["o1"],
         }
-    ).to_csv(tmp_path / "providers.csv", index=False)
+    ).to_csv(tmp_path / "private_e.csv", index=False)
 
     X, y = load_and_prepare_data(tmp_path)
     assert X["patient_age"].tolist() == [40.0, 41.0]
