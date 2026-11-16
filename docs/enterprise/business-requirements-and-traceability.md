@@ -5,7 +5,7 @@
 ## Problem, users and human decision rights
 The supervised label is a **historically recorded** `PAID` or `DENIED` status. The proposed business purpose is to prioritise some **received claims for earlier human examination** before adjudication. The model cannot decide whether a claim ought to be paid, whether policy coverage exists, or whether any provider or claimant committed fraud.
 
-**Proposed decision cutoff:** After claim receipt and encounter metadata availability, **before** initial adjudication, settlement, appeals or status changes. No claim-intake or attribute-update timestamps are available in this codebase to prove the cutoff; source-owner validation remains a P0 blocker.
+**Proposed decision cutoff:** After claim receipt and encounter metadata availability, **before** initial adjudication, settlement, appeals or status changes. No claim-intake or attribute-update timestamps are available in this codebase to prove the cutoff; source-owner validation remains a critical prerequisite.
 
 **Decision rights:** The examiner follows policy, may disregard/override the score, and records the eventual review outcome. No automatic adverse action is permitted.
 
@@ -36,4 +36,4 @@ Claims definition and review cost; lawful data usage; minimum necessary input fi
 **Business acceptance is distinct from model accuracy:** reviewers should test false alarms, incorrect joins, aged claims, incomplete records, explainability and escalation behaviour before any live pilot.
 
 
-See [P0 evidence and data gates](p0-evidence-gates.md) for the external checks required before any insurer pilot or performance claim.
+See [Model assurance and operations](assurance-security-and-operations.md) and the [validation and risk register](validation-gap-register.md) for the external checks required before any pilot or performance claim.
