@@ -34,4 +34,17 @@ Create a data-protection impact assessment where required by the applicable juri
 **Go/no-go:** dataset authorization, independent test report, examiner UAT signoff, fairness review, privacy/security assessment, monitoring SLA, incident and rollback exercises, accountable ownership. Missing gates must be marked *not satisfied*, never silently inferred.
 
 
-**P0 status:** Training/evaluation artifacts are stamped as *unverified research only* and use a versioned safe feature profile. Neither a passing synthetic CI run nor locally calculated statistics constitutes insurer approval or independently verified predictive performance. See [P0 evidence and data gates](p0-evidence-gates.md).
+## Model validation and acceptance requirements
+
+The research workflow uses a documented conservative feature contract and marks training/evaluation artefacts as **unverified research evidence**. Passing synthetic regression tests does not establish independent prediction performance, insurer approval or point-in-time feature validity.
+
+Before any operational pilot, an authorised data steward and independent reviewer would need to:
+
+1. Confirm source permissions, historical claim-status definitions, outcome maturity, amendments and appeals, and required access controls.
+2. Establish the proposed claim-intake prediction timestamp and independently confirm that both model features were available at that time.
+3. Retrain and reproduce the fixed patient-separated evaluation on approved source data, reporting claim counts, class prevalence, confusion matrices, precision/recall, F2, average precision, ROC-AUC and naive baselines.
+4. Test later-period generalisation without using the future evaluation period to choose a model or threshold.
+5. Evaluate performance at a **fixed human-review capacity** against baseline queue handling, including false escalations, fairness, reviewer overrides and measurable workload effects.
+6. Obtain explicit claims-operations, model-risk, privacy/security and governance decisions, with documented acceptance criteria and rollback procedures.
+
+**Current position:** Independent results, temporal feature validation, examiner testing and operational approval are not available in this repository. No prototype metrics should be presented as a proven improvement in claim outcomes, cost or fraud detection.
