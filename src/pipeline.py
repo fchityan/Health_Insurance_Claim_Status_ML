@@ -24,13 +24,18 @@ SOURCE_FILES = ("encounters.csv", "claims.csv", "organizations.csv", "patients.c
 TARGET_COLUMN = "claim_status"
 DENIED_LABEL = "DENIED"
 PAID_LABEL = "PAID"
-FEATURE_COLUMNS = [
-    "visit_type",
-    "patient_gender",
-    "patient_age",
-    "total_visit_claim_cost",
-    "claim_amount",
-]
+# P0 safe-by-default reference profile. Only use fields that plausibly exist at
+# intake; their actual availability must still be verified by a data owner.
+# Do not add payment, settlement, future-outcome or cost fields without a
+# timestamped feature-availability audit and independent review.
+FEATURE_PROFILE = "pre_adjudication_minimal_v1"
+DECISION_POINT = "After claim intake, before adjudication or claim-status changes"
+FEATURE_COLUMNS = ["visit_type", "patient_age"]
+EXCLUDED_FEATURE_COLUMNS = frozenset({
+    "patient_gender", "total_visit_claim_cost", "claim_amount",
+    "claim_status", "service_date", "claims_id", "patient_id",
+})
+
 
 
 @dataclass
@@ -112,13 +117,13 @@ def load_and_prepare_data_with_metadata(
     })
     _require_columns(encounters, [
         "visit_id", "patient_id", "provider_id", "healthcare_organization_id",
-        "visit_type", "total_visit_claim_cost",
+        "visit_type",
     ], "encounters.csv")
     _require_columns(claims, [
         "claims_id", "visit_id", "patient_id", "provider_id",
-        "healthcare_organization_id", "service_date", "claim_amount", TARGET_COLUMN,
+        "healthcare_organization_id", "service_date", TARGET_COLUMN,
     ], "claims.csv")
-    _require_columns(patients, ["patients_id", "patient_gender", "patient_birthdate"], "patients.csv")
+    _require_columns(patients, ["patients_id", "patient_birthdate"], "patients.csv")
     _require_columns(providers, ["providers_id", "providers_speciality"], "providers.csv")
     _require_columns(organizations, [
         "healthcare_organization_id", "organization_name", "organization_city",
@@ -138,13 +143,17 @@ def load_and_prepare_data_with_metadata(
 
     claims_for_join = claims[[
         "claims_id", "visit_id", "patient_id", "provider_id",
-        "healthcare_organization_id", "service_date", "claim_amount", TARGET_COLUMN,
+        "healthcare_organization_id", "service_date", TARGET_COLUMN,
     ]].rename(columns={
         "patient_id": "claim_patient_id",
         "provider_id": "claim_provider_id",
         "healthcare_organization_id": "claim_organization_id",
     })
-    merged = encounters.merge(
+    encounter_fields = [
+        "visit_id", "patient_id", "provider_id",
+        "healthcare_organization_id", "visit_type",
+    ]
+    merged = encounters[encounter_fields].merge(
         claims_for_join, on="visit_id", how="inner", validate="one_to_many",
     )
     for encounter_key, claim_key in [
@@ -157,7 +166,7 @@ def load_and_prepare_data_with_metadata(
             raise ValueError(f"Claim and encounter disagree on {encounter_key}.")
 
     merged = merged.merge(
-        patients[["patients_id", "patient_gender", "patient_birthdate"]],
+        patients[["patients_id", "patient_birthdate"]],
         left_on="patient_id", right_on="patients_id", how="left",
         validate="many_to_one",
     )
@@ -174,7 +183,15 @@ def load_and_prepare_data_with_metadata(
         if merged[column].isna().any():
             raise ValueError(f"Unmatched reference record after joining {column}.")
 
-    merged = merged[merged[TARGET_COLUMN].isin([PAID_LABEL, DENIED_LABEL])].copy()
+    # Do not silently discard pending, reversed or unknown statuses: the owner
+    # must explicitly extract mature historical labels before training.
+    invalid_status = ~merged[TARGET_COLUMN].isin([PAID_LABEL, DENIED_LABEL])
+    if invalid_status.any():
+        raise ValueError(
+            "Claims contain missing/non-final statuses. Supply a documented, "
+            "approved mature PAID/DENIED cohort; do not silently filter labels."
+        )
+    merged = merged.copy()
     if merged.empty or merged[TARGET_COLUMN].nunique() < 2:
         raise ValueError("Dataset must contain both PAID and DENIED claims.")
     merged["service_date"] = pd.to_datetime(merged["service_date"], errors="coerce")
@@ -186,6 +203,8 @@ def load_and_prepare_data_with_metadata(
     merged.loc[(merged["patient_age"] < 0) | (merged["patient_age"] > 120), "patient_age"] = np.nan
 
     X = merged[FEATURE_COLUMNS].reset_index(drop=True)
+    if set(X.columns) & EXCLUDED_FEATURE_COLUMNS:
+        raise RuntimeError("Unapproved claim-cost, outcome or sensitive feature detected.")
     y = merged[TARGET_COLUMN].reset_index(drop=True)
     metadata = merged[["claims_id", "patient_id", "service_date"]].reset_index(drop=True)
     return X, y, metadata
