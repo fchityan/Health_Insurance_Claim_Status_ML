@@ -11,6 +11,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 
 from .pipeline import (
+    FEATURE_COLUMNS,
+    FEATURE_PROFILE,
+    DECISION_POINT,
     build_preprocessor,
     denied_probability,
     evaluate_predictions,
@@ -83,6 +86,8 @@ def main() -> None:
     args = parser.parse_args()
 
     X, y, metadata = load_and_prepare_data_with_metadata(args.data_dir)
+    if list(X.columns) != FEATURE_COLUMNS:
+        raise ValueError("Unapproved feature schema: pre-adjudication profile is required.")
     splits = split_data(
         X, y, groups=metadata["patient_id"], random_state=args.random_state,
     )
@@ -143,6 +148,9 @@ def main() -> None:
         "threshold": best_threshold,
         "random_state": args.random_state,
         "feature_columns": list(splits.X_train.columns),
+        "feature_profile": FEATURE_PROFILE,
+        "decision_point": DECISION_POINT,
+        "evidence_status": "unverified_research_only",
         "source_sha256": fingerprint,
         "split_method": "stratified_patient_group_5_fold",
         "model": best_model,
@@ -196,6 +204,10 @@ def main() -> None:
         },
         "source_sha256": fingerprint,
         "features": list(X.columns),
+        "feature_profile": FEATURE_PROFILE,
+        "decision_point": DECISION_POINT,
+        "evidence_status": "unverified_research_only",
+        "external_validation": "pending_authorized_dataset_and_independent_reproduction",
         "best_model": best_name,
         "selected_threshold": best_threshold,
         "threshold_mode": args.threshold,

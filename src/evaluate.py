@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 
 from .pipeline import (
+    FEATURE_COLUMNS,
+    FEATURE_PROFILE,
+    DECISION_POINT,
     denied_probability,
     evaluate_predictions,
     load_and_prepare_data_with_metadata,
@@ -48,6 +51,11 @@ def main() -> None:
     if artifact.get("split_method") != "stratified_patient_group_5_fold":
         raise ValueError("Model artifact lacks a supported patient-grouped split; retrain first.")
 
+    if artifact.get("feature_profile") != FEATURE_PROFILE or artifact.get("decision_point") != DECISION_POINT:
+        raise ValueError("Artifact uses an unapproved legacy feature profile; retrain before evaluation.")
+    if artifact.get("feature_columns") != FEATURE_COLUMNS:
+        raise ValueError("Artifact feature schema contains unapproved or missing intake fields.")
+
     model = artifact["model"]
     threshold = float(artifact["threshold"])
     random_state = int(artifact.get("random_state", 42))
@@ -63,6 +71,17 @@ def main() -> None:
     metrics = evaluate_predictions(splits.y_test, y_pred, denied_probs)
     metrics["threshold"] = threshold
     metrics["model_name"] = artifact.get("model_name", "unknown")
+    metrics["feature_profile"] = FEATURE_PROFILE
+    metrics["decision_point"] = DECISION_POINT
+    metrics["evidence_status"] = "unverified_local_holdout_research_only"
+    metrics["independently_reproduced"] = False
+    metrics["out_of_time_validated"] = False
+    metrics["deployment_approved"] = False
+    metrics["limitations"] = (
+        "Historical PAID/DENIED statuses are not coverage ground truth; "
+        "source-data provenance, label maturity, feature timestamps, "
+        "independent reproduction and temporal generalisation require approval."
+    )
     metrics["split_method"] = artifact["split_method"]
     metrics["source_sha256"] = current_digest
     metrics["split_rows"] = {

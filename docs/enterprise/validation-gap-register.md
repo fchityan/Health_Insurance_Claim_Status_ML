@@ -1,4 +1,4 @@
-# Validation Gap Register — Health Insurance Claim Status ML
+# Validation Gap Register — Historical Denial-Risk Screening
 
 **Scope:** Historical PAID/DENIED classification for a possible *human review-prioritisation* use case. No policy-compliant claims adjudication or fraud outcome is inferred from these labels.
 
@@ -9,11 +9,11 @@
 | P0 | Claim/encounter joins silently duplicate or mismatch patient/provider/organization records | **Implemented + synthetic tests** | `src/pipeline.py`; orphan, duplicate, mismatch, and multi-claim tests in `tests/test_integrity.py` |
 | P0 | Repeated patients leak between training and holdout | **Implemented + synthetic tests** | Five-fold stratified patient-group split. Does **not** substitute for out-of-time validation |
 | P0 | Evaluator uses a different or reordered source dataset from training | **Implemented + synthetic tests** | Source CSV SHA-256 stored with the trusted model; changed input blocks evaluation |
-| P0 | Claims model interpreted as deciding which claims should be denied | **Clarified; business review still open** | README defines historic outcome, not coverage entitlement, medical necessity or fraud |
-| P0 | Claim and encounter costs might not exist at prediction cutoff | **Open** | Establish decision-time data availability and run a leakage audit/feature ablation |
-| P0 | Source CSVs absent; current test metrics not independently reproduced | **Open** | Obtain authorized data, preserve provenance and rerun grouped and temporal holdouts |
+| P0 | Historical status confused with policy-correct adjudication | **Use case narrowed; business approval OPEN** | Intake-stage prioritisation for human examiner only; historical status is not entitlement, fraud or payment recommendation |
+| P0 | Claim and visit costs, gender or post-decision variables leak into model features | **Default excluded + synthetic tests; as-of audit OPEN** | `pre_adjudication_minimal_v1` restricts model to visit type and age; require evidence that both were available by claim intake |
+| P0 | Source CSVs absent; current test metrics not independently reproduced | **OPEN** | Obtain authorised, mature-status data; independently reproduce grouped and later-period holdouts. Synthetic CI is not a model-performance result |
 | P1 | High DENIED recall can result from flagging everything DENIED | **Baseline reporting implemented** | Always-PAID and always-DENIED metrics added; compare review workload and precision |
-| P1 | Multiple versions of historical claim status, appeals and reversals | **Open** | Define label-finalization policy and outcome time window with claims owners |
+| P1 | Multiple versions of historical claim status, appeals and reversals | **OPEN; non-final values fail closed** | Explicit mature PAID/DENIED-only cohort enforced; status-finalisation policy and outcome window need claims-owner approval |
 | P1 | Stratified patient groups do not prevent future-to-past leakage | **Open** | Construct out-of-time test with adequate outcome maturity and no shared patient leakage |
 | P1 | Threshold is tuned to F2 rather than insurer costs or examiner capacity | **Open** | Compare cost-weighted expected value, precision at review capacity, calibration and workload |
 | P1 | Gender/age/provider-related proxy effects may create inequitable review | **Open** | Sensitive-attribute review, subgroup error, drift, appeal and override procedures |
@@ -29,4 +29,6 @@
 4. Claims operations signs realistic examiner UAT, capacity/false-alarm policy, override procedures and appeals.
 5. Security/privacy and model-risk reviewers accept access, retention, audit and incident controls.
 
-**Outcome:** This branch improves code integrity and testing, but none of these release gates are implied to have passed. The older notebook's reported results must not be promoted as current grouped-test metrics.
+**P0 control summary:** Code now rejects unknown/non-final labels and legacy feature artifacts and excludes claim/visit-cost predictors and gender by default. This reduces known risk but does **not** verify historical feature timing or current model performance. See [P0 evidence and data gates](p0-evidence-gates.md).
+
+**Outcome:** Code integrity has improved, but none of the external release gates are implied to have passed. The historical notebook's results cannot be promoted as current grouped-test metrics.
