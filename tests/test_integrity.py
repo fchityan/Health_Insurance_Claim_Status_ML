@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import joblib
 import subprocess
 import sys
 
@@ -11,6 +12,9 @@ import pandas as pd
 import pytest
 
 from src.pipeline import (
+    FEATURE_COLUMNS,
+    FEATURE_PROFILE,
+    DECISION_POINT,
     load_and_prepare_data,
     load_and_prepare_data_with_metadata,
     source_fingerprint,
@@ -157,6 +161,15 @@ def test_train_evaluate_and_reject_changed_data(synthetic_claim_files, tmp_path)
     subprocess.run(evaluate, check=True, capture_output=True, text=True)
     payload = json.loads(metrics.read_text())
     assert payload["split_method"] == "stratified_patient_group_5_fold"
+    assert payload["feature_profile"] == FEATURE_PROFILE
+    assert payload["evidence_status"] == "unverified_local_holdout_research_only"
+    assert payload["independently_reproduced"] is False
+    assert payload["out_of_time_validated"] is False
+    assert payload["deployment_approved"] is False
+    bundle = joblib.load(model)
+    assert bundle["feature_columns"] == FEATURE_COLUMNS
+    assert bundle["feature_profile"] == FEATURE_PROFILE
+    assert bundle["decision_point"] == DECISION_POINT
     assert payload["source_sha256"] == source_fingerprint(synthetic_claim_files)
     assert "baseline_all_denied" in payload
     assert "baseline_all_paid" in payload
@@ -167,3 +180,49 @@ def test_train_evaluate_and_reject_changed_data(synthetic_claim_files, tmp_path)
     failed = subprocess.run(evaluate, check=False, capture_output=True, text=True)
     assert failed.returncode != 0
     assert "Source CSV files differ" in failed.stderr
+
+
+def test_intake_features_ignore_excluded_cost_and_gender_values(synthetic_claim_files):
+    original, _, _ = load_and_prepare_data_with_metadata(synthetic_claim_files)
+    assert list(original.columns) == FEATURE_COLUMNS
+    assert "claim_amount" not in original.columns
+    assert "total_visit_claim_cost" not in original.columns
+    assert "patient_gender" not in original.columns
+
+    changes = [
+        ("claims.csv", "CLAIM_AMOUNT", 999999.0),
+        ("encounters.csv", "TOTAL_CLAIM_COST", 9999999.0),
+        ("patients.csv", "GENDER", "X"),
+    ]
+    for filename, col, replacement in changes:
+        path = synthetic_claim_files / filename
+        df = pd.read_csv(path)
+        df[col] = replacement
+        df.to_csv(path, index=False)
+
+    changed, _, _ = load_and_prepare_data_with_metadata(synthetic_claim_files)
+    pd.testing.assert_frame_equal(original, changed)
+
+
+def test_missing_unapproved_cost_gender_columns_are_accepted(synthetic_claim_files):
+    for filename, col in [
+        ("claims.csv", "CLAIM_AMOUNT"),
+        ("encounters.csv", "TOTAL_CLAIM_COST"),
+        ("patients.csv", "GENDER"),
+    ]:
+        path = synthetic_claim_files / filename
+        df = pd.read_csv(path).drop(columns=[col])
+        df.to_csv(path, index=False)
+
+    X, y, _ = load_and_prepare_data_with_metadata(synthetic_claim_files)
+    assert list(X.columns) == FEATURE_COLUMNS
+    assert set(y) == {"PAID", "DENIED"}
+
+
+def test_unknown_or_pending_claim_label_fails_closed(synthetic_claim_files):
+    path = synthetic_claim_files / "claims.csv"
+    df = pd.read_csv(path)
+    df.loc[0, "STATUS"] = "PENDING"
+    df.to_csv(path, index=False)
+    with pytest.raises(ValueError, match="missing/non-final statuses"):
+        load_and_prepare_data_with_metadata(synthetic_claim_files)
