@@ -78,7 +78,7 @@ These controls reduce potential leakage and unnecessary feature exposure, but **
 
 ## Reproducing the research workflow
 
-The model expects authorised local copies of `encounters.csv`, `claims.csv`, `patients.csv`, `providers.csv` and `organizations.csv`. The source files and generated artefacts are not included in this public repository.
+The model expects five authorised local source CSVs for encounters, claims, patients, providers and organisations. Their physical filenames are not documented publicly. The source files and generated artefacts are not included in this public repository.
 
 ```bash
 python -m pip install -r requirements.txt
