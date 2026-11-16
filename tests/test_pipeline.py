@@ -4,6 +4,8 @@ import pandas as pd
 from src.pipeline import (
     DENIED_LABEL,
     PAID_LABEL,
+    FEATURE_COLUMNS,
+    FEATURE_PROFILE,
     build_preprocessor,
     load_and_prepare_data,
     select_threshold,
@@ -101,3 +103,5 @@ def test_patient_age_uses_service_date(tmp_path) -> None:
     X, y = load_and_prepare_data(tmp_path)
     assert X["patient_age"].tolist() == [40.0, 41.0]
     assert set(y) == {"PAID", "DENIED"}
+    assert list(X.columns) == FEATURE_COLUMNS
+    assert FEATURE_PROFILE == "pre_adjudication_minimal_v1"
