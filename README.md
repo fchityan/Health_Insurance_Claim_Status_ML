@@ -76,25 +76,6 @@ These controls reduce potential leakage and unnecessary feature exposure, but **
 | **Model governance** | Validation requirements, limitations, privacy considerations and operational controls | [Model assurance and operations](docs/enterprise/assurance-security-and-operations.md) · [Validation register](docs/enterprise/validation-gap-register.md) |
 | **Exploratory research** | Original academic analysis of provider costs, separate from the current status-prediction workflow | [Historical analysis notebook](Health_Insurance_Claim_Status_ML.ipynb) |
 
-## Reproducing the research workflow
-
-The model expects five authorised local source CSVs for encounters, claims, patients, providers and organisations. Their physical filenames are not documented publicly. Set the `ENCOUNTERS_DATA_PATH`, `CLAIMS_DATA_PATH`, `ORGANIZATIONS_DATA_PATH`, `PATIENTS_DATA_PATH` and `PROVIDERS_DATA_PATH` environment variables to their local paths before training or evaluation. The source files and generated artefacts are not included in this public repository.
-
-```bash
-python -m pip install -r requirements.txt
-python -m pytest -q
-
-python -m src.train --data-dir . \
-  --model-out artifacts/best_model.joblib \
-  --outputs-dir outputs --threshold auto
-
-python -m src.evaluate --data-dir . \
-  --model-path artifacts/best_model.joblib \
-  --outputs-dir outputs
-```
-
-Only use data you are authorised to process and trusted local model artefacts. The evaluation output is explicitly marked as unverified research evidence until independent replication and approval. Older model artefacts using the prior feature profile must be retrained.
-
 ## Project scope and limitations
 
 This is a **research and portfolio implementation**, not a deployed claims-processing service. It does not automate payment or denial decisions, establish fraud or coverage eligibility, or demonstrate measured operational savings. Real-world use would require independently validated performance on appropriately mature claims outcomes, confirmed prediction-time feature availability, legal and privacy review, and human-examiner acceptance.
